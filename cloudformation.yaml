@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-saml-project-000
+    Description: "Used for unique domain names."
+
+  SAMLMetadataURL:
+    Type: String
+    Default: "https://signin.aws.amazon.com/static/saml-metadata.xml"
+    Description: "SAML Metadata endpoint"
+
+  CallbackURLs:
+    Type: CommaDelimitedList
+    Default: "http://localhost:8000/saml/callback/"
+    Description: "The callback URLs for the Cognito User Pool Client"
+
+  LogoutURLs:
+    Type: CommaDelimitedList
+    Default: "http://localhost:8000/logout"
+    Description: "The logout URLs for the Cognito User Pool Client"
+
+Resources:
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: MyUserPool
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      MfaConfiguration: 'OFF'
+      AutoVerifiedAttributes:
+        - email
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: phone_number
+          AttributeDataType: String
+          Required: false
+          Mutable: true
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+        InviteMessageTemplate:
+          EmailMessage: "{username} Your temporary password is {####}"
+          EmailSubject: "Your temporary password"
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      UsernameAttributes:
+        - email
+      EmailConfiguration:
+        EmailSendingAccount: COGNITO_DEFAULT
+        
+  CognitoUserPoolClient:
+    DependsOn: CognitoSAMLProvider
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: django-project
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+      SupportedIdentityProviders:
+        - Okta
+      ExplicitAuthFlows:
+        - USER_PASSWORD_AUTH
+        - CUSTOM_AUTH_FLOW_ONLY
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - email
+        - openid
+      CallbackURLs: !Split [",", !Join [",", !Ref CallbackURLs]]
+      LogoutURLs: !Split [",", !Join [",", !Ref LogoutURLs]]
+      AllowedOAuthFlowsUserPoolClient: true
+      EnableTokenRevocation: true
+      PreventUserExistenceErrors: ENABLED
+
+  CognitoSAMLProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      ProviderName: Okta
+      ProviderType: SAML
+      UserPoolId: !Ref CognitoUserPool
+      ProviderDetails:
+        IDPInit: true
+        IDPSignout: true 
+        EncryptedResponses: false
+        MetadataURL: !Ref SAMLMetadataURL
+        RequestSigningAlgorithm: "rsa-sha256"
+      AttributeMapping:
+        email: "email"
+
+  CognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub "${ProjectName}-${AWS::StackName}-domain"
+      UserPoolId: !Ref CognitoUserPool
+
+Outputs:
+  CognitoUserPoolID:
+    Description: "The ID of the Cognito User Pool"
+    Value: !Ref CognitoUserPool
+
+  CognitoAppClientID:
+    Description: "The ID of the Cognito User Pool Client"
+    Value: !Ref CognitoUserPoolClient
+
+  CognitoRegion:
+    Description: "The AWS region where the Cognito resources are created"
+    Value: !Ref "AWS::Region"
+  
+  CognitoDomain:
+    Description: "Domain name used by cognito"
+    Value: !Sub "${CognitoUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com"
+
+  SPEntityID:
+    Description: "SAML - SP Entity ID for IDP"
+    Value: !Sub "urn:amazon:cognito:sp:${CognitoUserPool}"
+
+  ACSEndpoint:
+    Description: "SAML - ACS Endpoint for IDP"
+    Value: !Sub "https://${CognitoUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com/saml2/idpresponse"
+
