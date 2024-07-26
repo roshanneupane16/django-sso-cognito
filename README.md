@@ -13,8 +13,8 @@ This project demonstrates how to integrate Single Sign-On (SSO) using Okta as th
 
 1. **Clone the repository:**
     ```bash
-    git clone https://github.com/your-repo/django-sso-okta-cognito.git
-    cd django-sso-okta-cognito
+    git clone https://github.com/roshanneupane16/django-sso-cognito.git
+    cd django-sso-cognito
     ```
 
 2. **Install the dependencies:**
