@@ -20,6 +20,8 @@ This project demonstrates how to integrate Single Sign-On (SSO) using Okta as th
 2. **Install the dependencies:**
     ```bash
     pip install -r requirements.txt
+    python manage.py makemigrations
+    python manage.py migrate
     ```
 
 3. **Deploy cloudformation templage:**
